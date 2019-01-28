@@ -1,128 +1,3 @@
-#' Identifies canditate series for recalibration
-#'
-#' RecalList() takes the output from MFAssign() and/or MFAssignCHO()
-#' and identifies the homologous series that could be used as recalibrants.
-#'
-#' It returns a dataframe that contains the CH2 homologous series that
-#' contain more than 3 members.
-#'
-#' The columns of the returned dataframe are as follows:
-#'
-#' Series - reports the homologous series according to class, adduct, and DBE,
-#' the format is "class_adduct_DBE", for example a homologous series with
-#' class = "O6, adduct of Na+, and DBE = 4 would be "O6_Na_4"
-#'
-#' Number Observed - reports the number of members of each homologous series.
-#'
-#' Series Index - represents the order of the series when ordered by length of
-#' homologous series.
-#'
-#' Mass Range - reports the minimum and maximum mass for the compounds within a
-#' homologous series.
-#'
-#' Tall Peak - reports the mass of the most abundant peak in each series.
-#’
-#' Abundance Score - reports the percentage difference between the mean abundance
-#' of a homologous series and the median abundance within the mass range the
-#' "Tall Peak" falls in (for example m/z 200-300). A higher score is generally better.
-#'
-#' Peak Score - This column compares the intensity of the tallest peak in a
-#' given series to the second tallest peak in the series This comparison is
-#' calculated by log10(Max Peak Intensity/Second Peak Intensity) The closer
-#' to 0 this value is the better, in general.
-#'
-#' Peak Distance - This column shows the number of CH2 units between the tallest
-#' and second tallest peak in each series. In general, it is better for the
-#' value to be as close to 1 as possible.
-#'
-#' Series Score - This column compares the number of actual observations in each
-#' series to the theoretical maximum number based on the CH2 homologous series.
-#' The closer to one this value is, the better.
-#'
-#'
-#' While the function does make some minor decisions as to which series to choose
-#' from (more than 3 members of homologous series) the rest of the decision
-#' making is left to the user.
-#'
-#' @param df data frame output from MFAssign() or MFAssignCHO()
-#'
-#' @return data frame
-#'
-#' @examples
-#' RecalList(df = Data)
-#' @export
-#df = Unambig3
-RecalList <- function(df){
-  df$number <- 1
-  df$Adduct <- "H"
-  df$Adduct <- replace(df$Adduct, df$M > 0, "Na")
-  df$Adduct <- replace(df$Adduct, df$POE == 1, "OE")
-  df$Adduct <- replace(df$Adduct, df$NOE == 1, "OE")
-  df$SeriesAdd <- paste(df$class, df$Adduct, sep = "_")
-
-  colnames(df)[colnames(df)=="exp_mass"] <- "Exp_mass"
-  colnames(df)[colnames(df)=="abundance"] <- "Abundance"
-
-  df1 <- subset(aggregate(number ~ SeriesAdd + DBE, df,
-                          function(x) number=sum(x, na.rm = TRUE)),
-                na.action = NULL)
-
-  longseries <- df1[order(-df1$number),]
-  longseries$Index <- 1:nrow(longseries)
-  Recal <- merge(df, longseries, by.x = c("SeriesAdd", "DBE"), by.y = c("SeriesAdd", "DBE"))
-  Recal <- tidyr::unite(Recal, Series, SeriesAdd, DBE, sep = "_", remove = FALSE)
-
-  Recal <- dplyr::group_by(Recal, Index)
-  Recal <- dplyr::mutate(Recal, Min = min(Exp_mass), Max = max(Exp_mass), MInt = mean(Abundance),
-                         Maxmass = ifelse(Abundance == max(Abundance), Exp_mass, NA), Maxint = max(Abundance),
-                         Secint = sort(Abundance, TRUE)[2], Secmass = ifelse(Abundance ==sort(Abundance, TRUE)[2],Exp_mass,NA ))
-
-  Maxmass1 <- Recal[c(1,56)] #Select Maxmass
-  Maxmass1 <- Maxmass1[!is.na(Maxmass1$Maxmass),]
-  Secmass1 <- Recal[c(1,59)] #Select Secmass
-  Secmass1 <- Secmass1[!is.na(Secmass1$Secmass),]
-
-  Recal <- merge(Recal, Maxmass1, by.x = c("Series"), by.y = c("Series"))
-  Recal <- merge(Recal, Secmass1, by.x = c("Series"), by.y = c("Series"))
-
-  Recal <- Recal[Recal$number.y > 3,]
-  names(Recal)[56] <- "Maxmass"
-  Recal <- Recal[!is.na(Recal$Maxmass),]
-  Recal$M.window <- "a"
-  Recal$M.window[Recal$Maxmass> 0 & Recal$Maxmass < 200] <- "0-200"
-  Recal$M.window[Recal$Maxmass> 200 & Recal$Maxmass < 300] <- "200-300"
-  Recal$M.window[Recal$Maxmass> 300 & Recal$Maxmass < 400] <- "300-400"
-  Recal$M.window[Recal$Maxmass> 400 & Recal$Maxmass < 500] <- "400-500"
-  Recal$M.window[Recal$Maxmass> 500 & Recal$Maxmass < 600] <- "500-600"
-  Recal$M.window[Recal$Maxmass> 600 & Recal$Maxmass < 700] <- "600-700"
-  Recal$M.window[Recal$Maxmass> 700 & Recal$Maxmass < 800] <- "700-800"
-  Recal$M.window[Recal$Maxmass> 800] <- ">800"
-
-  Recal1 <- aggregate(MInt ~ M.window, Recal,
-                      function(x) number = median(x, na.rm = TRUE))
-  Recal <- merge(Recal, Recal1, by = "M.window")
-
-  Recal$IntRel <- (Recal$MInt.x-Recal$MInt.y)/Recal$MInt.y *100
-  Recal$Peakcomp <- log10(Recal$Maxint/Recal$Secint)
-  Recal$Nextpeak <- abs((Recal$Maxmass.y-Recal$Secmass.y)/14)
-  Recal <- Recal[c(2,52:66)]
-  Recal$Min <- round(Recal$Min, 3)
-  Recal$Max <- round(Recal$Max, 3)
-  Recal$SerScor <- ((Recal$Max-Recal$Min)/14+1)/Recal$number.y
-  Recal <- tidyr::unite(Recal, Range, Min, Max, sep = "-")
-  Recal <- Recal[-c(5,7,8,9,10,11,12)]
-  names(Recal)[3] <- "Series Index"
-  names(Recal)[2] <- "Number Observed"
-  names(Recal)[4] <- "Mass Range"
-  names(Recal)[5] <- "Tall Peak"
-  names(Recal)[6] <- "Abundance Score"
-  names(Recal)[9] <- "Series Score"
-  names(Recal)[8] <- "Peak Distance"
-  names(Recal)[7] <- "Peak Score"
-  Recal <- Recal[!duplicated(Recal), ]
-  Recal
-}
-
 ###############################################################
 #' Generates a plot to visualize recalibrant series, recalibrates two mass lists,
 #' and produces a list of the chosen recalibrants.
@@ -185,12 +60,12 @@ RecalList <- function(df){
 
 #peaks <- Mono1
 #isopeaks <- Iso1
-#df <- Unambig2
-#mode <- "neg"
+#df <- Unambig6
+#mode <- "pos"
 #SN <- 10000
 #series1 <- "O6_H_3"
 
-Recal <- function( df, peaks, isopeaks = "none",mode, SN = 0, mzRange = 50, series1=NA, series2=NA, series3=NA, series4=NA, series5=NA,
+Recal_2 <- function( df, peaks, isopeaks = "none",mode, SN = 0, mzRange = 50, series1=NA, series2=NA, series3=NA, series4=NA, series5=NA,
                           series6=NA, series7=NA, series8=NA, series9=NA, series10=NA, min = 100, max = 1000,
                           bin = 10, obs = 2){
   #Preparation of the recalibrants list
@@ -209,7 +84,7 @@ Recal <- function( df, peaks, isopeaks = "none",mode, SN = 0, mzRange = 50, seri
   names(df)[2] <- "Exp_mass"
 
 
-  isopeaks <- if(isopeaks == "none") data.frame(mass = 1, Abundance = 1, Tag = "X") else isopeaks
+  isopeaks <- if(isopeaks == "None") data.frame(mass = 1, Abundance = 1, Tag = "X") else isopeaks
   names(isopeaks)[1] <- "mass"
   names(isopeaks)[2] <- "Abundance"
   names(isopeaks)[3] <- "Tag"
@@ -220,7 +95,7 @@ Recal <- function( df, peaks, isopeaks = "none",mode, SN = 0, mzRange = 50, seri
 
   isopeaks$Tag2 <- "Iso"
 
-  peaks <- if(isopeaks != "none") rbind(peaks, isopeaks) else peaks
+  peaks <- if(isopeaks != "None") rbind(peaks, isopeaks) else peaks
 
   peaks <- peaks[c(2,1,3,4)]
   #isodummy <- data.frame
@@ -229,78 +104,17 @@ Recal <- function( df, peaks, isopeaks = "none",mode, SN = 0, mzRange = 50, seri
   #Merges recalibrant list to df in order to determine which recalibrants are in the data frame.
   RecalList2 <- merge(df, RecalList, by.x = "series", by.y = "series")
 
-  ##########################################
-  #Monoisotopic Peaks
-  #Prepares the recalibrant masses for use in recalibration steps.
-  RecalList <- RecalList2[c("Abundance", "Exp_mass", "C", "H", "O", "N", "S", "P", "E",
-                            "S34", "N15", "D", "Cl", "Fl", "Cl37", "M", "NH4", "POE", "NOE", "Z", "C13_mass")]
-  RecalList$NM <- round(RecalList$Exp_mass)
 
-  RecalList$KM_O <- RecalList$Exp_mass * (16/15.9949146223)
-  RecalList$KMD_O <- round(RecalList$NM - RecalList$KM_O, 3)
-  RecalList$z_O <- round(RecalList$Exp_mass)%%16 - 16
+  NewRecal <- RecalList2[c("Exp_mass", "formula", "theor_mass", "C13_mass")]
 
-  RecalList$KM_H2 <- RecalList$Exp_mass * (2/2.01565)
-  RecalList$KMD_H2 <- round(RecalList$NM - RecalList$KM_H2, 3)
-  RecalList$z_H2 <- round(RecalList$Exp_mass)%%2 - 2
+  FinalRecal2 <- NewRecal
 
-  Rest <- df[c("Abundance", "Exp_mass")]
-  Rest$NM <- round(Rest$Exp_mass)
-
-  Rest$KM_O <- Rest$Exp_mass * (16/15.9949146223)
-  Rest$KMD_O <- round(Rest$NM - Rest$KM_O, 3)
-  Rest$z_O <- round(Rest$Exp_mass)%%16 - 16
-
-  Rest$KM_H2 <- Rest$Exp_mass * (2/2.01565)
-  Rest$KMD_H2 <- round(Rest$NM - Rest$KM_H2, 3)
-  Rest$z_H2 <- round(Rest$Exp_mass)%%2 - 2
-
-  ############
-  #Picking recalibrants with series
-  knownO <- RecalList[c(1:21,24,25)]
-
-  names(knownO)[2] <- "base_mass"
-  Step2 <- merge(Rest, knownO, by.x = c("KMD_O", "z_O"), by.y = c("KMD_O", "z_O"))
-  Step2$O_num <- round(((Step2$Exp_mass - Step2$base_mass))/15.9949146223)
-  Step2$O <- Step2$O + Step2$O_num
-  Step2$Type <- "O"
-  Step2$form <- paste(Step2$C, Step2$H, Step2$O, Step2$N, Step2$S, Step2$P, Step2$E, Step2$S34,
-                      Step2$N15, Step2$D, Step2$Cl, Step2$Fl, Step2$Cl37, Step2$M, Step2$NH4,
-                      Step2$POE, Step2$NOE, sep = "_")
-  Step2 <- Step2[-c(10,31)]
-
-  knownH2 <- RecalList[c(1:21,27,28)]
-  names(knownH2)[2] <- "base_mass"
-  Step3 <- merge(Rest, knownH2, by.x = c("KMD_H2", "z_H2"), by.y = c("KMD_H2", "z_H2"))
-  Step3$H2_num <- round(((Step3$Exp_mass - Step3$base_mass))/2.01565)
-  Step3$H <- Step3$H + 2*Step3$H2_num
-  Step3$Type <- "H2"
-  Step3$form <- paste(Step3$C, Step3$H, Step3$O, Step3$N, Step3$S, Step3$P, Step3$E, Step3$S34,
-                      Step3$N15, Step3$D, Step3$Cl, Step3$Fl, Step3$Cl37, Step3$M, Step3$NH4,
-                      Step3$POE, Step3$NOE, sep = "_")
-  Step3 <- Step3[-c(10,31)]
-
-  Out <- rbind(Step2, Step3)
-  Out2 <- dplyr::distinct(Out, Exp_mass)
-
-  NewRecal <- merge(df, Out2, by = "Exp_mass")
-  NewRecal <- NewRecal[c("Abundance", "Exp_mass", "formula", "theor_mass", "C13_mass")]
-  #Good to here
-  #####################
-  #Picking recalibrants by abundance
-  NewRecal$Bin<-cut(NewRecal$Exp_mass,breaks=seq(min, max, by=bin))
-
-  FinalRecal <- dplyr::group_by(NewRecal, Bin)
-  FinalRecal2 <- dplyr::top_n(FinalRecal, obs, Abundance)
-
-
-  NewRecal_mono <- FinalRecal2[c(2:4)]
-  NewRecal_iso <- FinalRecal2[c(5,3,4)]
+  NewRecal_mono <- FinalRecal2[c(1:3)]
+  NewRecal_iso <- FinalRecal2[c(4,2,3)]
   NewRecal_iso <- NewRecal_iso[NewRecal_iso$C13_mass > 0,]
   names(NewRecal_iso)[1] <- "Exp_mass"
   NewRecal_iso$theor_mass <- NewRecal_iso$theor_mass + 1.003355
   NewRecal <- rbind(NewRecal_mono, NewRecal_iso)
-
 
   ##########################
   #Setting up the recalibrant and mass lists so they can be recalibrated by section.
@@ -327,13 +141,11 @@ Recal <- function( df, peaks, isopeaks = "none",mode, SN = 0, mzRange = 50, seri
 
   }
 
-  #This section calculates how many recalibrants are in each segment
-  #test <- NewRecal
   NewRecal$Test <- 1
   for(i in 1:Dummy2){
     I <- i
 
-   NewRecal$Test <- replace(NewRecal$Test, NewRecal$Range == I, nrow(NewRecal[NewRecal$Range == as.numeric(I),]))
+    NewRecal$Test <- replace(NewRecal$Test, NewRecal$Range == I, nrow(NewRecal[NewRecal$Range == as.numeric(I),]))
 
 
   }
@@ -347,12 +159,7 @@ Recal <- function( df, peaks, isopeaks = "none",mode, SN = 0, mzRange = 50, seri
   FinalRecal2 <- merge(FinalRecal2, Align, by.x = "Exp_mass", by.y = "Exp_mass")
   FinalRecal2 <- FinalRecal2[c(1:5)]
   names(FinalRecal2)[3] <- "formula"
-  #Range <- peaks[!is.na(peaksAll$mass),]
-  #nloop1 <- ceiling((max(Allmasses$mass)-DeNovo)/200)
-  #Needs to be saved outside loop so it stays intact
-  #Unambigsave <- Unambig
-  #Ambigsave <- Ambig
-  #Ambigreturn <- Ambigsave[Ambigsave$Exp_mass < DeNovo,]
+
   #########################
   #Calculating the weights needed for recalibration and calculating the recalibrated masses.
   names(NewRecal)[1] <- "E_mass"
@@ -372,29 +179,29 @@ Recal <- function( df, peaks, isopeaks = "none",mode, SN = 0, mzRange = 50, seri
     J <- j
     while(J <= Dummy3){
 
-    NewRecal_2 <- NewRecal[NewRecal$Range == J,]
-    peaks_2 <- peaks[peaks$Range == J,]
-    peaks_final <- rbind(peaks_dum, peaks_out)
-    Ej_final <- rbind(Ej_dum, Ej_out)
-    counter <- 1
-    J <- J + Dummy3
-  while(counter == 1){
-    counter <- counter + 1
-  NewRecal_2$num <- 0:(nrow(NewRecal_2)-1)
-  NewRecal_2$weight <- factorial(nrow(NewRecal_2)-1)/
-    (factorial(NewRecal_2$num)*factorial((nrow(NewRecal_2)-1)-NewRecal_2$num))
+      NewRecal_2 <- NewRecal[NewRecal$Range == J,]
+      peaks_2 <- peaks[peaks$Range == J,]
+      peaks_final <- rbind(peaks_dum, peaks_out)
+      Ej_final <- rbind(Ej_dum, Ej_out)
+      counter <- 1
+      J <- J + Dummy3
+      while(counter == 1){
+        counter <- counter + 1
+        NewRecal_2$num <- 0:(nrow(NewRecal_2)-1)
+        NewRecal_2$weight <- factorial(nrow(NewRecal_2)-1)/
+          (factorial(NewRecal_2$num)*factorial((nrow(NewRecal_2)-1)-NewRecal_2$num))
 
-  NewRecal_2$mzweight <- NewRecal_2$weight*NewRecal_2$E_mass
-  NewRecal_2$Ejweight <- NewRecal_2$weight*(NewRecal_2$E_mass-NewRecal_2$Th_mass)/NewRecal_2$Th_mass
-  NewRecal_2$Ejsum <- sum(NewRecal_2$Ejweight)/2^(nrow(NewRecal_2)-1)
-  NewRecal_2$masssum <- sum(NewRecal_2$mzweight)/2^(nrow(NewRecal_2)-1)
-  Ejsum <- mean(NewRecal_2$Ejsum)
-  peaks_out <- peaks_2
-  peaks_out$mass <- peaks_out$mass/(1+Ejsum)
-  peaks_out <- rbind(peaks_final, peaks_out)
-  Ej_out <- data.frame(Ejsum = Ejsum, Range = mean(NewRecal_2$Range))
-  Ej_out <- rbind(Ej_final, Ej_out)
-  }
+        NewRecal_2$mzweight <- NewRecal_2$weight*NewRecal_2$E_mass
+        NewRecal_2$Ejweight <- NewRecal_2$weight*(NewRecal_2$E_mass-NewRecal_2$Th_mass)/NewRecal_2$Th_mass
+        NewRecal_2$Ejsum <- sum(NewRecal_2$Ejweight)/2^(nrow(NewRecal_2)-1)
+        NewRecal_2$masssum <- sum(NewRecal_2$mzweight)/2^(nrow(NewRecal_2)-1)
+        Ejsum <- mean(NewRecal_2$Ejsum)
+        peaks_out <- peaks_2
+        peaks_out$mass <- peaks_out$mass/(1+Ejsum)
+        peaks_out <- rbind(peaks_final, peaks_out)
+        Ej_out <- data.frame(Ejsum = Ejsum, Range = mean(NewRecal_2$Range))
+        Ej_out <- rbind(Ej_final, Ej_out)
+      }
 
     }
     peaks_final <- peaks_out
@@ -427,7 +234,7 @@ Recal <- function( df, peaks, isopeaks = "none",mode, SN = 0, mzRange = 50, seri
     I <- i
 
     FinalRecal3$Range <- replace(FinalRecal3$Range, FinalRecal3$Exp_mass >= min(FinalRecal3$Exp_mass) + (I-1) * mzRange &
-                             FinalRecal3$Exp_mass < min(FinalRecal3$Exp_mass) + I*mzRange, I)
+                                   FinalRecal3$Exp_mass < min(FinalRecal3$Exp_mass) + I*mzRange, I)
 
   }
 
@@ -445,8 +252,8 @@ Recal <- function( df, peaks, isopeaks = "none",mode, SN = 0, mzRange = 50, seri
 
   RecalOut <- merge(Align, Ej_final, by.x = "Range", by.y = "Range")
   RecalOut$R_mass <- RecalOut$Exp_mass/(1+RecalOut$Ejsum)
-  RecalOut$recal_err <- abs((RecalOut$R_mass-RecalOut$theor_mass)/RecalOut$theor_mass * 10^6)
-  RecalOut$orig_err <- abs((RecalOut$Exp_mass-RecalOut$theor_mass)/RecalOut$theor_mass * 10^6)
+  RecalOut$Recal_err <- abs((RecalOut$R_mass-RecalOut$theor_mass)/RecalOut$theor_mass * 10^6)
+  RecalOut$Orig_err <- abs((RecalOut$Exp_mass-RecalOut$theor_mass)/RecalOut$theor_mass * 10^6)
 
   AbundM <- df[c("Exp_mass", "Abundance")]
   AbundI <- df[c("C13_mass", "C13_abund")]
@@ -458,8 +265,6 @@ Recal <- function( df, peaks, isopeaks = "none",mode, SN = 0, mzRange = 50, seri
   RecalPlot <- merge(RecalOut, Abund, by.x = "Exp_mass", by.y = "Exp_mass")
 
   RecalOut <- RecalOut[c(2, 3, 4, 7, 8)]
-
-
 
   #Plot highlighting the recalibrant ions for qualitative assessment.
   MZ<-ggplot2::ggplot() + ggplot2::geom_segment(data=plotpeak, size=0.7,ggplot2::aes_string(x = "mass", xend = "mass", y = 0, yend = "Abundance"), alpha = 0.3, color = "grey57")+

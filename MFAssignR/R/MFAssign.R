@@ -33,7 +33,7 @@
 #' The inclusion of an isotopic mass list is not required, however.
 #'
 #' @param peaks data frame, Monoisotopic Masses
-#' @param isopeaks data frame, Isotopic Masses
+#' @param isopeaks data frame, Isotopic Masses. Default is "none"
 #' @param ionMode string: ("neg", "pos")
 #' @param lowMW numeric:
 #' Sets the lower limit of molecular mass to be assigned. Default is 100.
@@ -118,7 +118,7 @@
 #' @export
 
 
-MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, POEx = 0, NOEx = 0, Nx=0,Sx=0, Px=0, S34x=0,
+MFAssign <- function(peaks, isopeaks = "none", ionMode, lowMW=100,highMW=1000, POEx = 0, NOEx = 0, Nx=0,Sx=0, Px=0, S34x=0,
                                   N15x=0, Dx=0,Ex=0, Clx=0, Cl37x=0, Fx = 0, Mx=0, NH4x=0, Zx=1, Ox = 30, ppm_err = 3, SN = 0, O_Cmin = 0,
                                   O_Cmax = 2.5, H_Cmin = 0.3, H_Cmax = 3, DBEOmin = -13, DBEOmax = 13, Omin = 0, HetCut = "off",
                                   NMScut = "on", DeNovo = 300, nLoop = 5) {
@@ -127,8 +127,6 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
   if(NOEx >1) print('WARNING: Positive Odd Electron (NOEx) is greater than 1, are you sure that is what you want?')
 
   if(ionMode != "pos" & ionMode != "neg") print("WARNING: ionMode should be 'pos' or 'neg' ")
-
-  #if(ionMode != "neg") print("WARNING: ionMode should be 'neg'")
 
   if(Nx > 5 | Sx > 5|Px >5|S34x>5|N15x >5|Dx>5|Ex>5|Clx > 5|Cl37x>5|Mx>5|NH4x>5|Fx > 5)
     print("WARNING: One or more heteroatoms are set greater than 5, this will cause the function to perform more slowly.")
@@ -158,12 +156,13 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
   names(peaks)[2] <- "mass"
   names(peaks)[1] <- "RA"
 
-  isopeaks2 <- if(isopeaks != "None") isopeaks else data.frame(x=0,y=0)
+  isopeaks2 <- if(isopeaks != "none") isopeaks else data.frame(x=0,y=0,Tag = 0)
 
-  isopeaks2 <- isopeaks2[c(2,1)]
+  isopeaks2 <- isopeaks2[c(2,1,3)]
 
   names(isopeaks2)[2] <- "Iso_mass"
   names(isopeaks2)[1] <- "Iso_RA"
+  names(isopeaks2)[3] <- "Tag"
 
   peaksAll <- peaks
 
@@ -450,7 +449,7 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
                             Z = unlist(recordsdf$Z), Neutral_mass = unlist(recordsdf$Neutral_mass),
                             CHO_mass = unlist(recordsdf$CHO_mass), CHO_Err = unlist(recordsdf$CHO_Err),
                             Ratio = unlist(recordsdf$Ratio))
-#test <-records1$Exp_mass[6]
+
     records1 <- dplyr::mutate(env$recordsdf, C = C+1*Ratio, H = H+4*Ratio+N+N15+P+2*POE+Cl+Cl37+Fl - 2*NOE,
                               O = O-1*Ratio)
     records1 <- records1[records1$C > 1 & records1$O >=0 & records1$RA >=0,]
@@ -498,7 +497,7 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
                                 N15*Valence("N15") + Cl*Valence("Cl") + Cl37*Valence("Cl37")
     )
 
-
+#recordssave <- records1
 
 
     records1 <- dplyr::filter(records1, C>0& H>0&O>=Omin& H >= D)
@@ -515,11 +514,11 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
 
                                 AE_ppm <= ppm_err &
 
-                                Even(Senior1)==TRUE & DBE >= 0 &
+                                Even(Senior1)==TRUE & DBE >= 0 & DBE <= 0.9 * (C + N) &
 
                                 O <= 2 * C + 3 * (N+N15) + 4 * P + 4 * (S+S34)&
 
-                                O>= P*4&
+                                #O>= P*4&
 
                                 #RA >= 0 &
 
@@ -529,6 +528,50 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
     )
 
     #NOEx working perfect to this point.
+   #Sulf <- records1[records1$S == 1,]
+    ##################
+    ###S34 isotope check QA
+    if(isopeaks != "none"){
+      #The next line was changed for the new isotoping
+    SIso <- isopeaks2[isopeaks2$Tag == "S34"|isopeaks2$Tag == "C13_S34"|isopeaks2$Tag == "2C13_S34",]
+    SIso <- unlist(SIso[2])
+    recordsS <- records1[records1$S > 0,]
+    recordsS <- unlist(recordsS[3])
+    rest <- records1[records1$S == 0,]
+
+    Sulf <- expand.grid(recordsS, SIso)
+    names(Sulf)[1] <- "Exp_mass"
+    names(Sulf)[2] <- "Iso_mass"
+
+    Sulf$mdiff <- Sulf$Exp_mass - Sulf$Iso_mass
+    Sulf <- Sulf[Sulf$mdiff > -2 & Sulf$mdiff < -1.98,]
+
+
+    Sulf$KM2 <- Sulf$Iso_mass * (2 / 1.995797)
+    Sulf$KMD2 <- round((round(Sulf$Iso_mass) - Sulf$KM2),3)
+    Sulf$KM <- Sulf$Exp_mass * (2 / 1.995797)
+    Sulf$KMD <- round((round(Sulf$Exp_mass) - Sulf$KM),3)
+
+    Sulf$KMDdiff <- Sulf$KMD - Sulf$KMD2
+
+    Sulf <- Sulf[abs(Sulf$KMDdiff) < 0.002,]
+    Sulf <- Sulf[1]
+    Sulfdata <- records1[records1$S > 0,]
+    Sulfur <- merge(Sulf, Sulfdata, by.x = "Exp_mass", by.y = "Exp_mass")
+
+
+    restalign <- rest[c(3,1)]
+    restalign <- merge(Sulfur, restalign, by.x = "Exp_mass", by.y = "Exp_mass", all = T)
+    restmass <- restalign[is.na(restalign$RA.x),]
+    restmass <- restmass[c(1,49)]
+    restfinal <- merge(rest, restmass, by.x = "Exp_mass", by.y = "Exp_mass", all = T)
+    restfinal <- restfinal[!is.na(restfinal$RA.y),]
+    restfinal <- restfinal[-49]
+
+    records1 <- rbind(restfinal, Sulfur)
+    records1 <- records1[c(2,3,1, 4:48)]
+    }
+    ###################################################
 
     ###Series analysis
     ##Determining Ambiguity
@@ -616,6 +659,7 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
                              KM_CH2 = -42, KM_CH2O = -42, KM_H2O= -42, KM_H2 = -42, NM = 0)
     unknown <- Ambig
     unknown <- rbind(unknown, unknowndummy)
+    Ambigreturn <- unknowndummy
 
     DummyOut <- data.frame(KMD_CH2 = -42, KMD_O = -42, RA.x = -42,KMD_CH2O = -42,  KMD_H2O = -42, KMD_H2 = -42, z_CH2 = -42, z_O = -42,
                            z_CH2O = -42, z_H2O = -42, z_H2 = -42,  Exp_mass = -42, C = 4, H = 4, O = 0, N = 0, S = 0,
@@ -624,6 +668,35 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
                            Type = "X", form = "E")
 
     pb2 <- txtProgressBar(min = 0, max = nLoop, style = 3)
+
+    ###############
+   Allmasses <- peaksAll[!is.na(peaksAll$mass),]
+    nloop1 <- ceiling((max(Allmasses$mass)-DeNovo)/200)
+    #Needs to be saved outside loop so it stays intact
+    Unambigsave <- Unambig
+    Ambigsave <- Ambig
+    Ambigreturn <- Ambigsave[Ambigsave$Exp_mass < DeNovo,]
+    #j = 1
+    for(j in 0:(nloop1)){
+      loop <- j
+      masstrim <- DeNovo + 200*loop
+      loop1 <- j-1
+      if(loop1 < 0) {loop1 <- 0}
+      masstrim1 <- DeNovo + 200*loop1
+     Ambig2 <- Ambigsave[Ambigsave$Exp_mass < masstrim,] #Resets a comparison df each time
+
+     Ambig4 <- merge(Ambigreturn, Ambig2, by.x = "Exp_mass", by.y = "Exp_mass", all = T)
+
+     Common <- Ambig4[!is.na(Ambig4$RA.x)&!is.na(Ambig4$RA.y),]
+     Common <- Common[c(1:18)]
+     names(Common) <- gsub(".x","",names(Common),fixed = TRUE)
+     New <- Ambig4[is.na(Ambig4$RA.x) & Ambig4$Exp_mass >= masstrim1,]
+     New <- New[c(1,19:ncol(New))]
+     names(New) <- gsub(".y","",names(New),fixed = TRUE)
+
+     Ambig <- rbind(Common, New)
+     #Ambig <- unique(Ambig)
+
 #Seems good to this point
     for(i in 1:nLoop){
 
@@ -701,7 +774,7 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
         Step5 <- Step5[-c(39)]
 
         Out <- rbind(Step1, Step2, Step3, Step4, Step5)
-        Out <- Out[(Out$C > 2 & Out$H > 4 & Out$O >= 0),]
+        Out <- Out[(Out$C >= 2 & Out$H >= 4 & Out$O >= 0),]
 
 
         Out <- rbind(Out, DummyOut)
@@ -728,7 +801,7 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
         Ambig <- merge(unknown, masses, by = "Exp_mass", all = T)
         Ambig <- Ambig[is.na(Ambig$Var),]
         Ambig <- Ambig[-19]
-        Ambig <- unique(Ambig)
+        Ambigreturn <- unique(Ambig)
 
         if(x == 2){
           break
@@ -737,7 +810,7 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
       setTxtProgressBar(pb2, i)
       Unambig
     }
-
+}
     records1 <- Unambig[c(1:20)]
 
     records1$mode <- ionMode
@@ -757,6 +830,7 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
 
     #NOEx seems to be good to this point.
     ###Standard QA steps, second round
+     #if(records1$E > 0) {records1$C <- records1$C + records1$E} # This is to fix the theor. masses
     records1 <- dplyr::mutate(records1, O_C = O/(C+E), H_C =H/(C+E),
 
                               Neutral_mass = Neutral_mass + POE * (2.0156500638/2)- NOE * (2.0156500638/2),
@@ -764,17 +838,17 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
 
                               theor_mass1 = EM("C") * C + EM("H") * H + EM("O") * O + N * EM("N14") +
                                 S * EM("S") + P * EM("P31") +
-                                Cl * EM("Cl35") + Fl * EM("Fl19") + E * EM("E") + S34 * EM("S34") +
+                                Cl * EM("Cl35") + Fl * EM("Fl19") + E * EM("E2") + S34 * EM("S34") +
                                 Cl37 * EM("Cl37m") + N15 * EM("N15H") +
                                 D * EM("D") + M * EM("M") + NH4 * EM("NH4") +POE * EM("POE") + NOE*EM("NOE"),
 
                               theor_mass = EM("C") * C + EM("H") * H + EM("O") * O + N * EM("N14") +
                                 S * EM("S") + P * EM("P31") + Fl * EM("Fl19") +
-                                Cl * EM("Cl35") +  E * EM("E") + S34 * EM("S34") + Cl37 * EM("Cl37m") +
+                                Cl * EM("Cl35") +  E * EM("E2") + S34 * EM("S34") + Cl37 * EM("Cl37m") +
                                 N15 * EM("N15H") +
                                 D * EM("D"),
 
-                              C = C + E,
+                              #C = C + E, #It is added back so that formulas are more accurate.
 
                               DBE = C - 0.5 * (H + Cl + Cl37 +Fl) + 0.5 * (N +N15+ P) + 1,
 
@@ -807,6 +881,7 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
 
 
     #recordssave <- records1
+    #records1 <- recordssave
 
     records1 <- dplyr::filter(records1, C>0, H>0,O>=Omin, H >= D)
     records1 <- unique(records1)
@@ -822,11 +897,11 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
 
                                 AE_ppm <= ppm_err &
 
-                                Even(Senior1)==TRUE & DBE >= 0 &
+                                Even(Senior1)==TRUE & DBE >= 0 & DBE <= 0.9 * (C + N) &
 
                                 O <= 2 * C + 3 * (N+N15) + 4 * P + 4 * (S+S34)&
 
-                                O>= P*4&
+                                #O>= P*4&
 
                                 RA > 0 &
 
@@ -852,7 +927,7 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
                     Sform = ifelse(STest == 0 , "",
                                    ifelse(STest == 1 , "S", paste("S",STest, sep = ""))),
                     Pform = ifelse(P == 0 , "",
-                                   ifelse(P == 1 , "P", paste("P",O, sep = ""))),
+                                   ifelse(P == 1 , "P", paste("P",P, sep = ""))),
                     Clform = ifelse(ClTest == 0 , "",
                                     ifelse(ClTest == 1 , "Cl", paste("Cl",ClTest, sep = ""))),
                     Flform = ifelse(Fl == 0 , "",
@@ -922,32 +997,154 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
 
     records1 <- records1[c(1,2,41:43,3:21,24,27:31, 26, 22:23,38, 32:34,39, 40)]
 
-    #records1 <- records1[c(1,2,38:40,3:21,24, 27:31, 26, 22:23,35, 32:34,36,37)]
+    #recordssave <- records1
+    #records1 <- recordssave
+    #Columns still good at this point
+    ######################################################################
+
+
+     ##Aligning Isotope masses back into the mass spectrum
+   ##Align single C13 masses
+    records1$C13_mass <- records1$Exp_mass + 1.0033548380
+    err <- ppm_err*10^-6
+    #The following line was changed for isotoping
+    C13Iso <- isopeaks2[isopeaks2$Tag == "C13"|isopeaks2$Tag == "C13_S34",]
+    names(C13Iso)[2] <- "C13_mass"
+    names(C13Iso)[1] <- "C13_Abund"
+    records1$C13_mass <- sapply(records1$C13_mass, function(x){
+      # First check if the element lies within tolerance limits of any element in df2
+      ifelse(min(abs(C13Iso$C13_mass - x), na.rm=TRUE) < err * x,
+             # If yes, replace that element in df1 with the matching element in df2
+             C13Iso[which.min(abs(C13Iso$C13_mass - x)), "C13_mass"], 0)
+    })
+
+    #Ccheck <- records1[records1$C13_mass > 0,]
+    records1 <- dplyr::left_join(records1, C13Iso, by = "C13_mass")
+    records1 <- records1[-42]
+    #########
+    #Align double C13 masses
+    records1$C13_mass2 <- records1$Exp_mass + 2.006709676
+    err <- ppm_err*10^-6
+    #The following line was changed for isotoping
+    C13Iso2 <- isopeaks2[isopeaks2$Tag == "2C13"| isopeaks2$Tag == "2C13_S34",]
+    names(C13Iso2)[2] <- "C13_mass2"
+    names(C13Iso2)[1] <- "C13_Abund2"
+    records1$C13_mass2 <- sapply(records1$C13_mass2, function(x){
+      # First check if the element lies within tolerance limits of any element in df2
+      ifelse(min(abs(C13Iso2$C13_mass2 - x), na.rm=TRUE) < err * x,
+             # If yes, replace that element in df1 with the matching element in df2
+             C13Iso2[which.min(abs(C13Iso2$C13_mass2 - x)), "C13_mass2"], 0)
+    })
+
+    #Ccheck <- records1[records1$C13_mass > 0,]
+    records1 <- dplyr::left_join(records1, C13Iso2, by = "C13_mass2")
+    records1 <- records1[!(records1$C13_mass == 0 & records1$C13_mass2 > 0),] # This is removing the peaks because it cannot find the single C13
+    records1 <- records1[-44]
+    #recordssave <- records1
+
+    ###########
+    #Align S34 masses  #This is a potential error zone if Sx >0 and no sulfur assigned, or if Sx >0 and
+    #no non-sulfur are assigned. Standard conditions should not have a problem.
+    if(Sx > 0){
+      recordsdummy <- records1[1,]
+      recordsdummy[!is.na(recordsdummy)] <- NA
+    recordsSulf <- records1[records1$S >0,]
+    recordsSulf <- rbind(recordsSulf, recordsdummy)
+    recordsrest <- records1[records1$S ==0,]
+    recordsrest <- rbind(recordsrest, recordsdummy)
+    recordsrest$S34_mass <- 0
+    recordsrest$S34_Abund <- 0
+    recordsSulf$S34_mass <- recordsSulf$Exp_mass + 1.995797
+    err <- ppm_err*10^-6
+
+    #The following line was changed for the isotoping
+    S34Iso <- isopeaks2[isopeaks2$Tag == "S34"|isopeaks2$Tag == "C13_S34"|isopeaks2$Tag == "2C13_S34",]
+    names(S34Iso)[2] <- "S34_mass"
+    names(S34Iso)[1] <- "S34_Abund"
+    recordsSulf$S34_mass <- sapply(recordsSulf$S34_mass, function(x){
+      # First check if the element lies within tolerance limits of any element in df2
+      ifelse(min(abs(S34Iso$S34_mass - x), na.rm=TRUE) < err * x,
+             # If yes, replace that element in df1 with the matching element in df2
+             S34Iso[which.min(abs(S34Iso$S34_mass - x)), "S34_mass"], 0)
+    })
+
+
+    recordsSulf <- dplyr::left_join(recordsSulf, S34Iso, by = "S34_mass")
+    recordsSulf <- recordsSulf[-46]
+    records1 <- rbind(recordsrest, recordsSulf)
+    } else{records1$S34_mass <- 0;
+           records1$S34_Abund <- 0}
 
     #recordssave <- records1
     #records1 <- recordssave
-    ######################################################################
-    ##Aligning Isotope masses back into the mass spectrum
-
-    records1$Iso_mass <- records1$Exp_mass + 1.0033548380
-    err <- ppm_err*10^-6
-    records1$Iso_mass <- sapply(records1$Iso_mass, function(x){
-      # First check if the element lies within tolerance limits of any element in df2
-      ifelse(min(abs(isopeaks2$Iso_mass - x), na.rm=TRUE) < err * x,
-             # If yes, replace that element in df1 with the matching element in df2
-             isopeaks2[which.min(abs(isopeaks2$Iso_mass - x)), "Iso_mass"], 0)
-    })
-
-    records1 <- dplyr::left_join(records1, isopeaks2, by = "Iso_mass")
-    unassignedIso <- dplyr::left_join(isopeaks2, records1, by = "Iso_mass")
-    unassignedIso <- unassignedIso[is.na(unassignedIso$Exp_mass),]
-    unassignedIso <- unassignedIso[c(1,2)]
-
-    names(unassignedIso)[2] <- "mass"
-    names(unassignedIso)[1] <- "RA"
-    unassigned <- rbind(unassigned, unassignedIso)  #Everything is accounted for to this point
+#Columns still good
+    #Check <- records1
+    #Check$dups <- duplicated(Check$Exp_mass)
 
 
+    #Checking to see if any polyisotope masses match an assigned monoisotope mass
+    Iso_check <- isopeaks2
+    names(Iso_check)[2] <- "Exp_mass"
+    Iso_check2 <- merge(records1, Iso_check, by.x = "Exp_mass", by.y = "Exp_mass")
+    Mono_check2 <- merge(records1, Iso_check, by.x = "Exp_mass", by.y = "Exp_mass", all = T)
+    Mono_check2 <- Mono_check2[!is.na(Mono_check2$C)& is.na(Mono_check2$Tag),]
+
+    I1 <- Mono_check2[c("C13_mass")]
+    names(I1)[1] <- "Exp_mass"
+    I2 <- Mono_check2[c("C13_mass2")]
+    names(I2)[1] <- "Exp_mass"
+    I3 <- Mono_check2[c("S34_mass")]
+    names(I3)[1] <- "Exp_mass"
+
+    IM <- rbind(I1, I2, I3)
+    IM$Tag2 <- "Iso"
+    IM <- unique(IM)
+
+    Iso_check3 <- merge(Iso_check2, IM, by.x = "Exp_mass", by.y = "Exp_mass", all = T)
+    Iso_check3 <- Iso_check3[!is.na(Iso_check3$C),]
+    MonoG1 <- Iso_check3[Iso_check3$C13_mass > 0 | Iso_check3$C13_mass2 > 0 | Iso_check3$S34_mass > 0,]
+    MonoG2 <- Iso_check3[is.na(Iso_check3$Tag2) & (Iso_check3$C13_mass == 0 &
+                                                      Iso_check3$C13_mass2 == 0 & Iso_check3$S34_mass == 0),]
+    MonoGF <- rbind(MonoG1, MonoG2)
+    MonoGF <- MonoGF[c(1:45)]
+    MonoRest <- Mono_check2[c(1:45)]
+    records1 <- rbind(MonoRest, MonoGF)
+    records1 <- records1[c(2,1,3:45)]
+    #Iso_rem <- Iso_check2[c("Exp_mass", "Iso_RA")]
+    #names(Iso_rem)[1] <- "Iso_mass"
+    #Iso_al <- merge(isopeaks2, Iso_rem, by.x = "Iso_mass", by.y = "Iso_mass", all = TRUE)
+    #isopeaks2 <- Iso_al[is.na(Iso_al$Iso_RA.y),]
+    #names(isopeaks2)[2] <- "Iso_RA"
+    #isopeaks2 <- isopeaks2[c(2,1,3)]
+
+
+    ###########
+    #ID unmatched isotope masses. For addition to unassigned mass list
+    #First ID the ones that were matched with a monoisotopic peak
+    #Don't think this is necessary any longer
+    #C13 <- records1[c(41,40)]
+    #names(C13)[1] <- "RA"
+    #names(C13)[2] <- "Iso_mass"
+    #C13_2 <- records1[c(43,42)]
+    #names(C13_2)[1] <- "RA"
+    #names(C13_2)[2] <- "Iso_mass"
+    #S34 <- records1[c(45,44)]
+    # names(S34)[1] <- "RA"
+    # names(S34)[2] <- "Iso_mass"
+    #
+    # Isomass <- rbind(C13, C13_2, S34)
+    # Isomass <- Isomass[Isomass$Iso_mass > 0,]
+    #
+    # unassignedIso <- merge(isopeaks2, Isomass, by.x = "Iso_mass", by.y = "Iso_mass", all = T)
+    # unassignedIso <- unassignedIso[is.na(unassignedIso$RA),]
+    #
+    # unassignedIso <- unassignedIso[c(2,1)]
+    # names(unassignedIso)[2] <- "mass"
+    # names(unassignedIso)[1] <- "RA"
+    #
+    # unassigned <- rbind(unassigned, unassignedIso)  #Everything is accounted for to this point
+
+##############################################################
     records1$Dups <- duplicated(records1$Exp_mass)
     records2 <- records1[records1$Dups == FALSE,]
     Ambig <- records1[records1$Dups == TRUE,]
@@ -958,17 +1155,17 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
 
     Ambigfinal <- dplyr::left_join(records2, Ambigcheck, by = "Exp_mass")
     Unambig <- Ambigfinal[is.na(Ambigfinal$Tag),]
-    Unambig <- Unambig[-c(42,43)]
+    Unambig <- Unambig[-c(46,47)]
     Ambigfinal <- Ambigfinal[!is.na(Ambigfinal$Tag),]
-    Ambigfinal <- Ambigfinal[-43]
+    Ambigfinal <- Ambigfinal[-47]
     Ambigout <- rbind(Ambig, Ambigfinal) #This one is fine
-    Ambigout <- Ambigout[-42]
+    Ambigout <- Ambigout[-46]
     Ambigout2 <- data.frame(Exp_mass = 1)
     Ambigout <- dplyr::bind_rows(Ambigout, Ambigout2)
     Ambigout <- unique(Ambigout)
     Ambigout$Tag <- "Ambiguous"
     Unambig$Tag <- "Unambiguous"
-    #Everything is good to this point
+    #Everything is good to this point, columns too
 
     #############
     ##Nominal Mass Series QA Step
@@ -998,20 +1195,121 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
       Ambig <- Ambigout3[Ambigout3$dups == TRUE | Ambigout3$dups2 == TRUE,]
       Ambig <- unique(Ambig)
 
-      Ambigout <- Ambig[-c(3,44:49)]
-      Ambigout <- Ambigout[c(3:29,1,30:34, 2, 35:42)]
-      Unambigout <- Unambig2[-c(3,44:49)]
-      Unambigout <- Unambigout[c(3:29,1,30:34, 2, 35:42)]
+      Ambigout <- Ambig[-c(3,48:53)]
+      Ambigout <- Ambigout[c(3:29,1,30:34, 2, 35:46)]
+      Unambigout <- Unambig2[-c(3,48:53)]
+      Unambigout <- Unambigout[c(3:29,1,30:34, 2, 35:46)]
       Unambig <- rbind(Unambig, Unambigout)
     }
 
-    #Unambig <- Unambig[!is.na(Unambig$N15),]
+    #Columns still good
     Unambig$theor_mass1 <- Unambig$theor_mass1 - Unambig$POE * 2.0156500638 +
       Unambig$NOE * 2.0156500638 + Unambig$NOE * electron - Unambig$POE * electron
     # #Everything is good to this point
 
+    Unambig[is.na(Unambig)] <- 0
+    Ambigout[is.na(Ambigout)] <- 0
+    Ambigout <- Ambigout[Ambigout$Exp_mass >0,]
+    records1[is.na(records1)] <- 0
+    ######################
+    #N3OS to 13C conversion
+    #Unambig <- Unambig2
+    N3OS <- Unambig[(Unambig$group == "CHNOS"|Unambig$group == "CHNS")&Unambig$O_C < 0.5,]
+    N3OSkeep <- Unambig[(Unambig$group == "CHNOS"|Unambig$group == "CHNS")&Unambig$O_C < 0.5,]
+    Rest <- Unambig[!((Unambig$group == "CHNOS"|Unambig$group == "CHNS")&Unambig$O_C < 0.5),]
+    N3OS$Cy <- N3OS$C - 2
+    N3OS$Hy <- N3OS$H + 1
+    N3OS$Ny <- N3OS$N - 3
+    N3OS$Sy <- N3OS$S - 1
+    N3OS$Oy <- N3OS$O + 6
+
+    N3OS <-
+      dplyr::mutate(N3OS, Cform = ifelse(Cy == 0 , "",
+                                             ifelse(Cy == 1 , "C", paste("C",Cy, sep = ""))),
+                    Hform = ifelse(Hy == 0 , "",
+                                   ifelse(Hy == 1 , "H", paste("H",Hy, sep = ""))),
+                    Nform = ifelse(Ny == 0 , "",
+                                   ifelse(Ny == 1 , "N", paste("N",Ny, sep = ""))),
+                    Oform = ifelse(Oy == 0 , "",
+                                   ifelse(Oy == 1 , "O", paste("O",Oy, sep = ""))),
+                    Sform = ifelse(Sy == 0 , "",
+                                   ifelse(Sy == 1 , "S", paste("S",Sy, sep = "")))
+                    )
+
+    N3OS <- tidyr::unite(N3OS, formula, Cform, Hform, Nform, Oform, Sform, sep = "")
+
+    N3OSAlign <- N3OS[c("formula", "Exp_mass", "RA")] #Fix at end
+    names(N3OSAlign)[2] <- "C13_mass1"
+    names(N3OSAlign)[3] <- "C13_Abund1"
+
+    Aligned <- merge(Unambig, N3OSAlign, by.x = "formula", by.y = "formula")
+    Aligned <- Aligned[Aligned$RA > Aligned$C13_Abund1,]
+
+    GoodN3OS <- merge(N3OSAlign, Aligned, by.x = "C13_mass1", by.y = "C13_mass1", all = T)
+    GoodN3OS <- GoodN3OS[is.na(GoodN3OS$formula.y),]
+    GoodN3OS <- GoodN3OS[c(1)]
+    names(GoodN3OS)[1] <- "Exp_mass"
+    GoodN3OS <- merge(N3OSkeep, GoodN3OS, by.x = "Exp_mass", by.y = "Exp_mass")
+
+    New13C <- Aligned[-c(40,41)]
+    names(New13C)[45] <- "C13_mass"
+    names(New13C)[46] <- "C13_Abund"
+
+    Final13C <- rbind(New13C, Rest)
+    Final13C <- Final13C[!duplicated(Final13C[c("formula", "Exp_mass")]),]
+
+    Unambig <- rbind(GoodN3OS, Final13C)
+    #This was fixed after new isotoping
+    Unambig <- Unambig[c(2,3, 1,4:46)]
     ###########
+    #Checking iso/mono matches
+    Iso_check <- isopeaks2
+    names(Iso_check)[2] <- "Exp_mass"
+    Iso_check2_X <- merge(Unambig, Iso_check, by.x = "Exp_mass", by.y = "Exp_mass")
+
+
+    ##############
     ##Plot data preparation
+    Unambig <- Unambig[!is.na(Unambig$C)&Unambig$Exp_mass > 2,]
+    Ambigout <- Ambigout[Ambigout$Exp_mass > 2,]
+
+    #Final Unassigned Peaks
+    P1 <- Unambig[c("Exp_mass")]
+    names(P1)[1] <- "mass"
+    P2 <- Unambig[c("C13_mass")]
+    names(P2)[1] <- "mass"
+    P3 <- Unambig[c("C13_mass2")]
+    names(P3)[1] <- "mass"
+    P4 <- Unambig[c("S34_mass")]
+    names(P4)[1] <- "mass"
+    P5 <- Ambigout[c("Exp_mass")]
+    names(P5)[1] <- "mass"
+    P6 <- Ambigout[c("C13_mass")]
+    names(P6)[1] <- "mass"
+    P7 <- Ambigout[c("C13_mass2")]
+    names(P7)[1] <- "mass"
+    P8 <- Ambigout[c("S34_mass")]
+    names(P8)[1] <- "mass"
+
+    AI <- isopeaks2[c(1,2)]
+    names(AI)[2] <- "mass"
+    names(AI)[1] <- "RA"
+    AM <- peaksAll2
+    names(AM)[2] <- "mass"
+    names(AM)[1] <- "RA"
+
+    AP <- rbind(AM, AI)
+    AP <- unique(AP)
+
+    GP <- rbind(P1, P2, P3, P4, P5, P6, P7, P8)
+    GP <- unique(GP)
+    GP$Tag <- "Good"
+
+    UP <- merge(AP, GP, by.x = "mass", by.y = "mass", all = T)
+    unassigned <- UP[is.na(UP$Tag),]
+    unassigned <- unassigned[c(1,2)]
+
+##############################################
     PD <- rbind(Ambigout, Unambig)
 
 
@@ -1023,11 +1321,14 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
     PDB$Tag2 <- "Other"
     PD <- rbind(PDG, PDB)
     PD <- PD[!is.na(PD$Tag),]
-
+    records1 <- records1[records1$Exp_mass > 0,]
+    unassigned <- unassigned[unassigned$mass > 0,]
 
 
     MZ<-ggplot2::ggplot() + ggplot2::geom_segment(data=records1, size=0.7,ggplot2::aes_string(x = "Exp_mass", xend = "Exp_mass", y = 0, yend = "RA"), color = "green")+
-      ggplot2::geom_segment(data=records1, size=0.7,ggplot2::aes_string(x = "Iso_mass", xend = "Iso_mass", y = 0, yend = "Iso_RA"), color = "blue")+
+      ggplot2::geom_segment(data=records1, size=0.7,ggplot2::aes_string(x = "C13_mass", xend = "C13_mass", y = 0, yend = "C13_Abund"), color = "blue")+
+      ggplot2::geom_segment(data=records1, size=0.7,ggplot2::aes_string(x = "C13_mass2", xend = "C13_mass2", y = 0, yend = "C13_Abund2"), color = "blue")+
+      ggplot2::geom_segment(data=records1, size=0.7,ggplot2::aes_string(x = "S34_mass", xend = "S34_mass", y = 0, yend = "S34_Abund"), color = "blue")+
       ggplot2::geom_segment(data=unassigned, size=0.7,ggplot2::aes_string(x = "mass", xend = "mass", y = 0, yend = "RA"), color = "red")+
       ggplot2::coord_cartesian(xlim = c(min(records1$Exp_mass), max(records1$Exp_mass)))+
       ggplot2::theme_bw()+ggplot2::labs(x = "Ion Mass", y = "Abundance", title = "Assignment Mass Spectrum", color = "DBE")+
@@ -1072,14 +1373,37 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
                      panel.grid.major.x=ggplot2::element_blank(), strip.background = ggplot2::element_blank(),
                      plot.title = ggplot2::element_text(size = 16, face = "bold"))
 
-    names(Unambig)[1] <- "Abundance"
+    colnames(Unambig)[colnames(Unambig)=="RA"] <- "abundance"
+    colnames(Unambig)[colnames(Unambig)=="Exp_mass"] <- "exp_mass"
+    colnames(Unambig)[colnames(Unambig)=="Neutral_mass"] <- "neutral_mass"
+    colnames(Unambig)[colnames(Unambig)=="C13_Abund"] <- "C13_abund"
+    colnames(Unambig)[colnames(Unambig)=="C13_Abund2"] <- "C13_abund2"
+    colnames(Unambig)[colnames(Unambig)=="S34_Abund"] <- "S34_abund"
+    colnames(Unambig)[colnames(Unambig)=="Tag"] <- "tag"
+    CU12 <- Unambig[c("abundance", "exp_mass", "formula")]
+    CURest <- Unambig[c(4:46)]
+    Unambig <- cbind(CU12, CURest)
     names(Unambig)[25] <- "theor_mass"
-    names(Ambigout)[1] <- "Abundance"
+    Unambig[is.na(Unambig)] <- 0
+
+    colnames(Ambigout)[colnames(Ambigout)=="RA"] <- "abundance"
+    colnames(Ambigout)[colnames(Ambigout)=="Exp_mass"] <- "exp_mass"
+    colnames(Ambigout)[colnames(Ambigout)=="Neutral_mass"] <- "neutral_mass"
+    colnames(Ambigout)[colnames(Ambigout)=="Tag"] <- "tag"
+    colnames(Ambigout)[colnames(Ambigout)=="C13_Abund"] <- "C13_abund"
+    colnames(Ambigout)[colnames(Ambigout)=="C13_Abund2"] <- "C13_abund2"
+    colnames(Ambigout)[colnames(Ambigout)=="S34_Abund"] <- "S34_abund"
+    CA12 <- Ambigout[c("abundance", "exp_mass", "formula")]
+    CARest <- Ambigout[c(4:46)]
+    Ambigout <- cbind(CA12, CARest)
     names(Ambigout)[25] <- "theor_mass"
-    Unambig <- Unambig[!is.na(Unambig$C),]
-    names(unassigned)[1] <- "Abundance"
-    unassigned <- unassigned[unassigned$Abundance > SN,]
-    unassigned <- unassigned[c(2,1)]
+    Unambig[is.na(Unambig)] <- 0
+
+    names(unassigned)[2] <- "abundance"
+    unassigned <- unassigned[unassigned$abundance > SN,]
+
+
+
     .rs.restartR()
 
     ##Final Output list
@@ -1089,8 +1413,6 @@ MFAssign <- function(peaks, isopeaks = "None", ionMode, lowMW=100,highMW=1000, P
     output
 
 }
-
-
 
 
 

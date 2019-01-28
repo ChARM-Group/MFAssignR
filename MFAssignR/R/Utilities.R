@@ -68,7 +68,7 @@ CompFactorToInt <- function(x) {
 #'
 #'
 #' @return factor (\code{"C", "H", "O", "N", "S", "P", "E", "S34", "N15", "D", "Cl", "Fl",
-# "Cl37", "M", "NH4", "POE", "NOE", "Z"})
+#'  "Cl37", "M", "NH4", "POE", "NOE", "Z"})
 #'
 #' @examples
 #' CompIntToFactor(1)

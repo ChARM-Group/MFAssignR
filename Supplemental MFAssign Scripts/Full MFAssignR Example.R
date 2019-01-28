@@ -15,9 +15,12 @@ Data <- read.csv("Your data.csv")
 
 #########################
 #Signal-to-noise estimation and check
-SNcutCheck(Data, bin = 0.01) #Default settings for SNcutCheck.
-
-SNplot(Data, cut = 1800, mass = 301.1, window.x = 50, window.y = 10) #Reasonable settings for SNplot
+Noise <- KMDNoise(Data) #Using new KMDNoise() noise estimation function
+plot <- Noise[["KMD"]]  #Extracting the plot from the KMDNoise function
+plot                    #Printing the plot
+KMDN <-Noise[["Noise"]] #Extracting the estimated noise from the KMDNoise function
+KMDN                    #Printing the noise
+SNplot(Data, cut = KMDN * 6, mass = 301.1, window.x = 50, window.y = 10) #Reasonable settings for SNplot
 
 #####################
 #Isotope prescreening
@@ -45,13 +48,13 @@ MSgroups
 VK
 ##################################
 #Highlighting possible recalibrant series
-check <- MFRecalList(Unambig1)
+check <- RecalList(Unambig1)
 
 ##################################
 #Qualitative check of recalibrant series and mass recalibration.
 
-Test <- MFRecalCheck(df = Unambig1,peaks = Mono, isopeaks = Iso, mode = "neg", SN = 1800, series1 = "O8_H_9",
-                     series2 = "O6_H_3", series3 = "O4_H_2", series4 = "O13_H_13", series5 = "O15_H_16")
+Test <- Recal(df = Unambig1,peaks = Mono, isopeaks = Iso, mode = "neg", SN = 1800, mzRange = 50, series1 = "O8_H_9",
+              series2 = "O6_H_3", series3 = "O4_H_2", series4 = "O13_H_13", series5 = "O15_H_16",bin = 10, obs = 2)
 
 Plot <- Test[["Plot"]]
 Plot      #This plot is slow to generate
@@ -88,7 +91,7 @@ VK
 #assignment
 
 Assign <- MFAssignAll(Mono2, Iso2, ionMode = "neg", lowMW =50, highMW = 1000,  Nx = 3, Sx = 1,  ppm_err = 3, H_Cmin = 0.3,
-                   HetCut = "off", NMScut = "on", SN = 1800)
+                      HetCut = "off", NMScut = "on", SN = 1800)
 
 Unambig3 <- Assign[["Unambig"]]
 Ambig3 <- Assign[["Ambig"]]

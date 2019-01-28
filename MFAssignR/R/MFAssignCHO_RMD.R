@@ -93,11 +93,11 @@
 #'   VK - ggplot of van Krevelen plot, colored by molecular group
 #'
 #' @examples
-#' MFAssignCHO(peaks = Mono_df, isopeaks = Iso_df, "neg", lowMW = 200, highMW = 700)
-#' MFAssignCHO(peaks = Mono_df, isopeaks = Iso_df, "neg", lowMW = 100, highMW = 1000)
+#' MFAssignCHO_RMD(peaks = Mono_df, isopeaks = Iso_df, "neg", lowMW = 200, highMW = 700)
+#' MFAssignCHO_RMD(peaks = Mono_df, isopeaks = Iso_df, "neg", lowMW = 100, highMW = 1000)
 #' @export
 
-MFAssignCHO <- function(peaks, isopeaks = "none", ionMode, lowMW=100,highMW=1000, POEx = 0, NOEx = 0, Ex = 0, Mx = 0, NH4x = 0, Zx=1, Ox = 30, ppm_err = 3, SN = 0, O_Cmin = 0,
+MFAssignCHO_RMD <- function(peaks, isopeaks = "none", ionMode, lowMW=100,highMW=1000, POEx = 0, NOEx = 0, Ex = 0, Mx = 0, NH4x = 0, Zx=1, Ox = 30, ppm_err = 3, SN = 0, O_Cmin = 0,
                                   O_Cmax = 2.5, H_Cmin = 0.3, H_Cmax = 3, DBEOmin = -13, DBEOmax = 13, Omin = 0, HetCut = "off", NMScut = "on",
                                   DeNovo = 1000, nLoop = 5) {
 
@@ -132,7 +132,7 @@ MFAssignCHO <- function(peaks, isopeaks = "none", ionMode, lowMW=100,highMW=1000
   names(peaks)[2] <- "mass"
   names(peaks)[1] <- "RA"
 
-  isopeaks2 <- if(isopeaks != "none") isopeaks else data.frame(x=0,y=0,Tag = 0)
+  isopeaks2 <- if(isopeaks != "None") isopeaks else data.frame(x=0,y=0,Tag = 0)
 
   isopeaks2 <- isopeaks2[c(2,1,3)]
 
@@ -827,8 +827,7 @@ MFAssignCHO <- function(peaks, isopeaks = "none", ionMode, lowMW=100,highMW=1000
 
     records1 <- records1[c(1,2,38:40,3:21,24, 27:31, 26, 22:23,35, 32:34,36,37)]
 
-    #######################
-
+    ######################################################################
     ##Aligning Isotope masses back into the mass spectrum
     ##Align single C13 masses
     records1$C13_mass <- records1$Exp_mass + 1.0033548380
@@ -850,7 +849,7 @@ MFAssignCHO <- function(peaks, isopeaks = "none", ionMode, lowMW=100,highMW=1000
     #Align double C13 masses
     records1$C13_mass2 <- records1$Exp_mass + 2.006709676
     err <- ppm_err*10^-6
-    C13Iso2 <- isopeaks2[isopeaks2$Tag == "2C13"|isopeaks2$Tag == "2C13_S34",]
+    C13Iso2 <- isopeaks2[isopeaks2$Tag == "2C13" | isopeaks2$Tag == "2C13_S34",]
     names(C13Iso2)[2] <- "C13_mass2"
     names(C13Iso2)[1] <- "C13_Abund2"
     records1$C13_mass2 <- sapply(records1$C13_mass2, function(x){
@@ -927,7 +926,7 @@ MFAssignCHO <- function(peaks, isopeaks = "none", ionMode, lowMW=100,highMW=1000
     MonoRest <- Mono_check2[c(1:45)]
     records1 <- rbind(MonoRest, MonoGF)
     records1 <- records1[c(2,1,3:45)]
-    ######################################################################
+    ##########################################
     #ID unmatched isotope masses. For addition to unassigned mass list
     C13 <- records1[c(41,40)]
     names(C13)[1] <- "RA"
@@ -1155,7 +1154,7 @@ MFAssignCHO <- function(peaks, isopeaks = "none", ionMode, lowMW=100,highMW=1000
     unassigned <- unassigned[unassigned$abundance > SN,]
 
 
-    .rs.restartR()
+    #.rs.restartR()
 
     ##Final Output list
     output <- list(Unambig = Unambig, Ambig = Ambigout, None = unassigned, MSAssign = MZ,
