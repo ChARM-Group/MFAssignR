@@ -41,19 +41,31 @@
 #'signal to noise cut for formula assignment.
 #'
 #'The y intercept for the upper and lower bounds are set
-#'to 0.05 (lower) and 0.2 (upper). The lower bound is 0.05
+#'to 0.05 (lower.y) and 0.2 (upper.y). The lower bound is 0.05
 #'instead of 0 as mentioned previously in order to ensure
 #'no analyte peaks are incorporated into the noise estimation.
 #'The upper limit is set at 0.2 so that it does not
 #'interact with any potentially doubly charged peaks, or the
 #'"echo" of those doubly charged peaks. Both of these values
 #'can be changed if desired by the user.
+#'
+#'The x intercept for the upper and lower bounds are set
+#'to NA, which means if the are not changed, it will default
+#'to the maximum and minimum mass in the mass spectrum. If the
+#'user wants to select a specific region then they can put
+#'whatever limit they want on it.
 
 
 #'
 #'@param df - dataframe of intensity and ion mass, column 1 should be mass, column 2 should be intensity
-#'@param upper - sets the upper limit for the y intercept, default is 0.2
-#'@param lower - sets the lower limit for the y intercept, default is 0.05
+#'
+#'@param upper.y - sets the upper limit for the y intercept, default is 0.2
+#'
+#'@param lower.y - sets the lower limit for the y intercept, default is 0.05
+#'
+#'@param upper.x - sets the upper limit for the x intercept, default is NA
+#'
+#'@param lower.x - sets the lower limit for the x intercept, default is NA
 #'
 #' @return list(Noise = Noise, Plot = KMD)
 #'         Noise - numeric value of the noise level for the data set
@@ -66,11 +78,15 @@
 #'
 #' @export
 #'
- #df <- Data
-KMDNoise <- function(df, upper = 0.2, lower = 0.05){
+ #df <- Raw_Neg_ML
+KMDNoise <- function(df, upper.y = 0.2, lower.y = 0.05, upper.x = NA, lower.x = NA){
 
   names(df)[1] <- "mass"
   names(df)[2] <- "intensity"
+
+  upper.x <- ifelse(is.na(upper.x)== TRUE, upper.x <- max(df$mass), upper.x <- upper.x)
+  lower.x <- ifelse(is.na(lower.x)== TRUE, lower.x <- min(df$mass), lower.x <- lower.x)
+
   df$KM <- df$mass * (14/14.01565)
   df$NM <- round(df$mass)
   df$KMD <- df$NM - df$KM
@@ -79,14 +95,13 @@ KMDNoise <- function(df, upper = 0.2, lower = 0.05){
   #Setting up the boundary lines for the chosen S/N area for plotting purposes
   Limits <- data.frame(Number = seq(round(min(df$mass/12)),round(max(df$mass/12)),1))
   Limits$mass <- Limits$Number*12
-  Limits$KMD_low <- 0.0011232*Limits$mass + lower
-  Limits$KMD_up <- 0.0011232*Limits$mass + upper
+  Limits$KMD_low <- 0.0011232*Limits$mass + lower.y
+  Limits$KMD_up <- 0.0011232*Limits$mass + upper.y
 
   #Filtering the actual data within the S/N area and calculating the average intensity
-  SN <- df[df$KMD > 0.0011232*df$mass + lower & df$KMD < 0.0011232*df$mass + upper,]
-  #SN8 <- Data8[Data8$KMD > 0.0011232*Data8$m.z +0.03 & Data8$KMD < 0.0011232*Data8$m.z + 0.1,]
-  #SN$Zmod <- 0.6745*(SN$int-mean(SN$int))/(median(abs(SN$int - median(SN$int))))
-  #Noise <- SN[abs(SN$Zmod) <= 3.5,]
+  SN <- df[df$KMD > 0.0011232*df$mass + lower.y & df$KMD < 0.0011232*df$mass + upper.y,]
+  SN <- SN[SN$mass >= lower.x & SN$mass <= upper.x,]
+
   Noise <- mean(SN$int)
   Noise <- exp(Noise)
 
@@ -96,8 +111,10 @@ KMDNoise <- function(df, upper = 0.2, lower = 0.05){
   KMD <-ggplot2::ggplot() + ggplot2::geom_point(data=df,
                                                ggplot2::aes_string(x = "mass", y = "KMD",
                                                                    color = "int" ), alpha = 1/3) +
-    ggplot2::geom_abline(slope = 0.0011232, intercept = lower, color = "red", size = 1)+
-    ggplot2::geom_abline(slope = 0.0011232, intercept = upper, color = "red", size = 1)+
+    ggplot2::geom_abline(slope = 0.0011232, intercept = lower.y, color = "red", size = 1)+
+    ggplot2::geom_abline(slope = 0.0011232, intercept = upper.y, color = "red", size = 1)+
+    ggplot2::geom_vline(xintercept = lower.x, color = "red", size = 1)+
+    ggplot2::geom_vline(xintercept = upper.x, color = "red", size = 1)+
     ggplot2::scale_color_gradientn(colors = colorRamps::blue2red(50), limit = c(min(df$int), max(df$int)))+
 
     ggplot2::labs(x = "Ion Mass", y = "Kendrick Mass Defect",

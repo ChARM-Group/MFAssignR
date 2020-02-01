@@ -5,11 +5,26 @@
 \title{Generates a plot to visualize recalibrant series, recalibrates two mass lists,
 and produces a list of the chosen recalibrants.}
 \usage{
-Recal(df, peaks, isopeaks = "none", mode, SN = 0, mzRange = 50,
-  series1 = NA, series2 = NA, series3 = NA, series4 = NA,
-  series5 = NA, series6 = NA, series7 = NA, series8 = NA,
-  series9 = NA, series10 = NA, min = 100, max = 1000, bin = 10,
-  obs = 2)
+Recal(
+  df,
+  peaks,
+  isopeaks = "none",
+  mode,
+  SN = 0,
+  mzRange = 30,
+  series1 = NA,
+  series2 = NA,
+  series3 = NA,
+  series4 = NA,
+  series5 = NA,
+  series6 = NA,
+  series7 = NA,
+  series8 = NA,
+  series9 = NA,
+  series10 = NA,
+  step_O = 3,
+  step_H2 = 5
+)
 }
 \arguments{
 \item{df}{data frame output from MFAssign() or MFAssignCHO()}
@@ -22,16 +37,11 @@ Recal(df, peaks, isopeaks = "none", mode, SN = 0, mzRange = 50,
 
 \item{SN}{numeric value of the signal-to-noise cut point for making the plot, default is 0}
 
-\item{mzRange}{numeric value defining the mass windows used for the segmented recalibration, default is 50}
+\item{mzRange}{numeric value defining the mass windows used for the segmented recalibration, default is 30}
 
-\item{min}{numeric - minimum mass range of the data being analyzed.}
+\item{step_O}{numeric value defining the number of oxygen "steps" for formula extension, default is 3}
 
-\item{max}{numeric - maximum mass range of the data being analyzed.}
-
-\item{bin}{numeric - sets the mass window bins to choose recalibrants from, default is 10.}
-
-\item{obs}{numeric - sets the number of peaks to choose as recalibrants from each bin,
-default is 2}
+\item{step_H2}{numeric value defining the number of H2 "steps" for formula extension, default is 5}
 
 \item{series(1-10)}{character the recalibrant series, "O7_Na_4" for example, default is NA}
 }
@@ -58,6 +68,7 @@ This recalibration method uses the first step from the paper from Kozhinov et al
 2014 (Anal. Chem.) to estimate the correction term, and uses the idea of a segmented
 or "walking" recalibration from Savory et al. 2011 (Anal. Chem) to further improve
 the recalibration.
+
 
 These parameters will be used to identify more potential recalibrants, and the
 tallest peaks within a user defined mass range will be used as recalibrants.

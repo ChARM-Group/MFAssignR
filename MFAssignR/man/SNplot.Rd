@@ -2,7 +2,6 @@
 % Please edit documentation in R/HistNoise.R, R/KMDNoise.R
 \name{SNplot}
 \alias{SNplot}
-\alias{SNplot}
 \title{Plot of Mass Spectrum with highlighted S/N cut}
 \usage{
 SNplot(df, cut, mass, window.x = 0.5, window.y = 10)
@@ -10,16 +9,6 @@ SNplot(df, cut, mass, window.x = 0.5, window.y = 10)
 SNplot(df, cut, mass, window.x = 0.5, window.y = 10)
 }
 \arguments{
-\item{df}{- dataframe of intensity and ion mass, column 1 should be intensity, column 2 should be mass}
-
-\item{cut}{- numeric value of the intensity cut value being investigated}
-
-\item{mass}{- numeric value setting a centerpoint to look at the mass spectrum}
-
-\item{window.x}{- numeric value setting the +/- range around the mass centerpoint, default is 0.5}
-
-\item{window.y}{- numeric value setting the y axis value for the plot, determined by multiplying the cut by this value}
-
 \item{df}{- dataframe of intensity and ion mass, column 1 should be intensity, column 2 should be mass}
 
 \item{cut}{- numeric value of the intensity cut value being investigated}

@@ -52,6 +52,7 @@ Series Score - This column compares the number of actual observations in each
 series to the theoretical maximum number based on the CH2 homologous series.
 The closer to one this value is, the better.
 
+
 While the function does make some minor decisions as to which series to choose
 from (more than 3 members of homologous series) the rest of the decision
 making is left to the user.

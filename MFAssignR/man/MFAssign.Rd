@@ -4,12 +4,56 @@
 \alias{MFAssign}
 \title{Assigns all possible MF to each row of input data frame with CHOFIT and formula extension}
 \usage{
-MFAssign(peaks, isopeaks = "none", ionMode, lowMW = 100, highMW = 1000,
-  POEx = 0, NOEx = 0, Nx = 0, Sx = 0, Px = 0, S34x = 0, N15x = 0,
-  Dx = 0, Ex = 0, Clx = 0, Cl37x = 0, Fx = 0, Mx = 0, NH4x = 0,
-  Zx = 1, Ox = 30, ppm_err = 3, SN = 0, O_Cmin = 0, O_Cmax = 2.5,
-  H_Cmin = 0.3, H_Cmax = 3, DBEOmin = -13, DBEOmax = 13, Omin = 0,
-  HetCut = "off", NMScut = "on", DeNovo = 300, nLoop = 5)
+MFAssign(
+  peaks,
+  isopeaks = "none",
+  ionMode,
+  lowMW = 100,
+  highMW = 1000,
+  POEx = 0,
+  NOEx = 0,
+  Nx = 0,
+  Sx = 0,
+  Px = 0,
+  S34x = 0,
+  N15x = 0,
+  Dx = 0,
+  Ex = 0,
+  Clx = 0,
+  Cl37x = 0,
+  Fx = 0,
+  Mx = 0,
+  NH4x = 0,
+  Zx = 1,
+  Sval = 2,
+  Nval = 3,
+  S34val = 2,
+  N15val = 3,
+  Pval = 5,
+  Ox = 30,
+  ppm_err = 3,
+  iso_err = 3,
+  SN = 0,
+  O_Cmin = 0,
+  O_Cmax = 2.5,
+  H_Cmin = 0.3,
+  H_Cmax = 3,
+  DBEOmin = -13,
+  DBEOmax = 13,
+  Omin = 0,
+  max_def = 0.9,
+  min_def = 0.5,
+  HetCut = "off",
+  NMScut = "on",
+  DeNovo = 300,
+  nLoop = 5,
+  SulfCheck = "on",
+  Ambig = "off",
+  MSMS = "off",
+  S34_abund = 30,
+  C13_abund = 60,
+  N3corr = "on"
+)
 }
 \arguments{
 \item{peaks}{data frame, Monoisotopic Masses}
@@ -71,11 +115,29 @@ Sets the amount of Ammonium adduct to be used in assignment. Default is 0.}
 \item{Zx}{numeric:
 Sets the amount of charge to be used in assignment. Default is 1.}
 
+\item{Sval}{numeric:
+Sets the valence of Sulfur. Default is 2.}
+
+\item{Nval}{numeric:
+Sets the valence of Nitrogen. Default is 3.}
+
+\item{S34val}{numeric:
+Sets the valence of Sulfur 34. Default is 2.}
+
+\item{N15val}{numeric:
+Sets the valence of Nitrogen 15. Default is 3.}
+
+\item{Pval}{numeric:
+Sets the valence of Phosphorus. Default is 5.}
+
 \item{Ox}{numeric:
-Ox sets the maximum number of oxygen looked for in the CHOFIT core, it limits the number of loops performed}
+Ox sets the maximum number of oxygen looked for in the CHOFIT core, it limits the number of loops performed.}
 
 \item{ppm_err}{numeric:
 ppm_err parameter sets the error tolerance (ppm) for formula assignment. Default is 3.}
+
+\item{iso_err}{numeric:
+iso_err parameter sets the error tolerance (ppm) for polyisotope matching. Default is 3.}
 
 \item{SN}{numeric:
 SN parameter set the signal to noise cut for formula assignment. Default is 0.}
@@ -102,17 +164,41 @@ DBEOmax parameter sets upper limit for DBE minus oxygen QA parameter. Default is
 \item{Omin}{numeric:
 Omin parameter sets lower limit for oxygen number in assigned formula. Default is 0.}
 
+\item{max_def}{numeric:
+Value for upper limit of mass defect for using floor() instead of round() for KMD. Default is 0.9}
+
+\item{min_def}{numeric:
+Value for lower limit of mass defect for using floor() instead of round() for KMD. Default is 0.5}
+
 \item{HetCut}{character:
 HetCut turns on or off the high heteroatom QA parameter. Default is "off"}
 
 \item{NMScut}{character:
-NMScut turns on or off the nominal mass series QA parameter. Default is “on”.}
+NMScut turns on or off the nominal mass series QA parameter. Default is "on".}
 
 \item{DeNovo}{numeric:
 DeNovo sets the de novo cut point for the data. Default is 300.}
 
-\item{nLoops}{numeric:
-nLoops sets the number of times the KMD and z* formula extension loops. Default is 5.}
+\item{nLoop}{numeric:
+nLoop sets the number of times the KMD and z* formula extension loops. Default is 5.}
+
+\item{SulfCheck}{character:
+Turns on or off the sulfur isotope check QA parameter. Default is "on".}
+
+\item{Ambig}{character:
+Turns on or off increased ambiguity for assignments. Default is "off".}
+
+\item{MSMS}{character:
+Turns on or off CH2 KMD prescreening before initial assignment. Default is "off".}
+
+\item{S34_abund}{numeric:
+Sets the maximum 34S/32S isotope ratio for isotope matching. Default is 30.}
+
+\item{C13_abund}{numeric:
+Sets the maximum 13C/12C isotope ratio for isotope matching. Default is 60.}
+
+\item{N3corr}{character:
+Turns on or off correction of N3OS monoisotopic assignments to 13C assignment. Default is "on"}
 }
 \value{
 list(Unambig = Unambig, Ambig = Ambigout, None = unassigned, MSAssign = MZ,
@@ -144,8 +230,7 @@ Most of these QA parameters can be adjusted from outside the function.
 
 Positive mode odd-electron formula assignment is possible using the POEx
 parameter. If set to 1 positive mode odd-electron ionized masses can be
-assigned. This is only really needed for APCI and APPI ionization modes.
-This option is currently unavailable, but will be addressed in a future release.
+assigned.
 
 The Ox term sets the number of loops performed by the CHOFIT core by defining the
 maximum oxygen allowed to be looked for. Three oxygen is equal to one loop due to

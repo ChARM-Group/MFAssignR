@@ -4,14 +4,18 @@
 \alias{KMDNoise}
 \title{Estimates the Signal to Noise cut}
 \usage{
-KMDNoise(df, upper = 0.2, lower = 0.05)
+KMDNoise(df, upper.y = 0.2, lower.y = 0.05, upper.x = NA, lower.x = NA)
 }
 \arguments{
 \item{df}{- dataframe of intensity and ion mass, column 1 should be mass, column 2 should be intensity}
 
-\item{upper}{- sets the upper limit for the y intercept, default is 0.2}
+\item{upper.y}{- sets the upper limit for the y intercept, default is 0.2}
 
-\item{lower}{- sets the lower limit for the y intercept, default is 0.05}
+\item{lower.y}{- sets the lower limit for the y intercept, default is 0.05}
+
+\item{upper.x}{- sets the upper limit for the x intercept, default is NA}
+
+\item{lower.x}{- sets the lower limit for the x intercept, default is NA}
 }
 \value{
 list(Noise = Noise, Plot = KMD)
@@ -62,13 +66,19 @@ users chosen value (3, 6, 10) in order to set the
 signal to noise cut for formula assignment.
 
 The y intercept for the upper and lower bounds are set
-to 0.05 (lower) and 0.2 (upper). The lower bound is 0.05
+to 0.05 (lower.y) and 0.2 (upper.y). The lower bound is 0.05
 instead of 0 as mentioned previously in order to ensure
 no analyte peaks are incorporated into the noise estimation.
 The upper limit is set at 0.2 so that it does not
 interact with any potentially doubly charged peaks, or the
 "echo" of those doubly charged peaks. Both of these values
 can be changed if desired by the user.
+
+The x intercept for the upper and lower bounds are set
+to NA, which means if the are not changed, it will default
+to the maximum and minimum mass in the mass spectrum. If the
+user wants to select a specific region then they can put
+whatever limit they want on it.
 }
 \examples{
 KMDNoise(df, upper = 0.2, lower = 0.05)
